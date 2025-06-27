@@ -251,26 +251,23 @@
                         loadSavedJobDescriptionsAdvanced(); // Load for advanced analyzer
                         loadRequiredSkillsAdvanced(); // Load for advanced analyzer
                     } else {
-                        try {
-                            // Attempt to sign in with custom token if available
-                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        // Check if __initial_auth_token is provided and non-empty
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token.length > 0) {
+                            try {
                                 await signInWithCustomToken(auth, __initial_auth_token);
-                            } else {
-                                // Fallback to anonymous sign-in if no custom token
+                            } catch (tokenError) {
+                                // Changed from console.error to console.warn as this is a graceful fallback
+                                console.warn("Error with custom token, falling back to anonymous:", tokenError);
+                                // Fallback to anonymous if custom token fails (e.g., expired, invalid)
                                 const anonymousUser = await signInAnonymously(auth);
                                 userId = anonymousUser.user.uid;
                                 console.log("Signed in anonymously. User ID:", userId);
-                                loadSavedJobDescriptionsAdvanced();
-                                loadRequiredSkillsAdvanced();
                             }
-                        } catch (authError) {
-                            console.error("Error signing in with custom token, falling back to anonymous:", authError);
-                            // If custom token sign-in fails, try anonymous sign-in
+                        } else {
+                            // No custom token provided or it's empty, sign in anonymously
                             const anonymousUser = await signInAnonymously(auth);
                             userId = anonymousUser.user.uid;
-                            console.log("Signed in anonymously after custom token failure. User ID:", userId);
-                            loadSavedJobDescriptionsAdvanced();
-                            loadRequiredSkillsAdvanced();
+                            console.log("Signed in anonymously. User ID:", userId);
                         }
                     }
                 });
@@ -440,7 +437,7 @@
                 requiredSkillsList.innerHTML = ''; // Clear loading message
 
                 if (querySnapshot.empty) {
-                    requiredSkillsList.innerHTML = '<p class="text-gray-500 text-sm">No required advanced skills added yet.</p>';
+                    savedJobDescriptionsList.innerHTML = '<p class="text-gray-500 text-sm">No required advanced skills added yet.</p>';
                 } else {
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
@@ -1114,16 +1111,17 @@
                                         "missingSkills": {
                                             "type": "ARRAY",
                                             "items": { "type": "STRING" }
-                                        },
-                                        "yearsOfExperience": { "type": "NUMBER" }, // Added years of experience
-                                        "recruiterAnalysis": { "type": "STRING" }
                                     },
-                                    "propertyOrdering": ["profileSummary", "matchScore", "matchedSkills", "missingSkills", "yearsOfExperience", "recruiterAnalysis"]
+                                    "yearsOfExperience": { "type": "NUMBER" }, // Added years of experience
+                                    "recruiterAnalysis": { "type": "STRING" }
+                                },
+                                "propertyOrdering": ["profileSummary", "matchScore", "matchedSkills", "missingSkills", "yearsOfExperience", "recruiterAnalysis"]
                                 }
                             }
                         };
 
-                        const apiKey = "";
+                        // IMPORTANT: Replace "YOUR_GENERATED_API_KEY_HERE" with your actual Gemini API key.
+                        const apiKey = "AIzaSyB65d-ZEnTOnejGiZNS306ReDS0qQ8ayZs"; 
                         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
                         const response = await fetch(apiUrl, {

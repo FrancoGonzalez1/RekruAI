@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rekru.AI - Sign Up</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Font for a techy logo -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f8fafc; /* gray-50 */
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        /* Dark Mode Styles */
+        html.dark {
+            background-color: #0c0a09; /* zinc-950 - very dark grey/black */
+            color: #e2e8f0; /* light gray text */
+        }
+        html.dark body {
+            background-color: #0c0a09;
+            color: #e2e8f0;
+        }
+        html.dark .bg-white {
+            background-color: #1a202c; /* darker background for card */
+        }
+        html.dark .text-gray-800 {
+            color: #e2e8f0;
+        }
+        html.dark .text-gray-600 {
+            color: #a0aec0;
+        }
+        html.dark input {
+            background-color: #2d3748; /* darker input background */
+            border-color: #4a5568; /* darker border */
+            color: #e2e8f0;
+        }
+        html.dark input::placeholder {
+            color: #718096;
+        }
+    </style>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Import Firestore functions
+
+        // Global Firebase variables (Canvas provides these)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        let app, auth, db;
+
+        // Initialize Firebase
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app); // Initialize Firestore
+        } catch (error) {
+            console.error("Error initializing Firebase:", error);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const signupForm = document.getElementById('signupForm');
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const confirmPasswordInput = document.getElementById('confirmPassword');
+            const signupError = document.getElementById('signupError');
+
+            // Check if user is already logged in
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    // User is signed in, redirect to main page or dashboard
+                    console.log("User already logged in:", user.uid);
+                    window.location.href = '../index.html'; // Adjust path as needed
+                }
+            });
+
+            signupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = emailInput.value;
+                const password = passwordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                signupError.textContent = '';
+
+                if (password !== confirmPassword) {
+                    signupError.textContent = 'Passwords do not match.';
+                    return;
+                }
+
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    const user = userCredential.user;
+                    console.log("User signed up successfully! UID:", user.uid);
+
+                    // Save user data to Firestore
+                    const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}`);
+                    await setDoc(userDocRef, {
+                        email: user.email,
+                        createdAt: new Date(),
+                        lastLogin: new Date()
+                    });
+                    console.log("User data saved to Firestore.");
+
+                    window.location.href = '../index.html'; // Redirect on successful signup
+                } catch (error) {
+                    console.error("Sign up error:", error.code, error.message);
+                    let errorMessage = "An unknown error occurred. Please try again.";
+                    switch (error.code) {
+                        case 'auth/email-already-in-use':
+                            errorMessage = 'This email address is already in use.';
+                            break;
+                        case 'auth/invalid-email':
+                            errorMessage = 'Invalid email address format.';
+                            break;
+                        case 'auth/operation-not-allowed':
+                            errorMessage = 'Email/password accounts are not enabled. Please contact support.';
+                            break;
+                        case 'auth/weak-password':
+                            errorMessage = 'Password is too weak. Please choose a stronger password.';
+                            break;
+                        default:
+                            errorMessage = `Sign up failed: ${error.message}`;
+                    }
+                    signupError.textContent = errorMessage;
+                }
+            });
+
+            // --- Dark Mode Toggle (copied from main page) ---
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const sunIcon = document.getElementById('sunIcon');
+            const moonIcon = document.getElementById('moonIcon');
+
+            function applyDarkMode(isDark) {
+                if (isDark) {
+                    document.documentElement.classList.add('dark');
+                    sunIcon.classList.add('hidden');
+                    moonIcon.classList.remove('hidden');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    sunIcon.classList.remove('hidden');
+                    moonIcon.classList.add('hidden');
+                }
+            }
+
+            // Check for saved dark mode preference
+            const savedDarkMode = localStorage.getItem('darkMode');
+            if (savedDarkMode === 'true') {
+                applyDarkMode(true);
+            } else {
+                applyDarkMode(false);
+            }
+
+            darkModeToggle.addEventListener('click', () => {
+                const isDark = document.documentElement.classList.contains('dark');
+                applyDarkMode(!isDark);
+                localStorage.setItem('darkMode', !isDark);
+            });
+        });
+    </script>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="relative w-full max-w-md bg-white p-8 rounded-lg shadow-xl border-t-4 border-indigo-500">
+        <!-- Dark Mode Toggle (positioned absolutely for this page) -->
+        <button id="darkModeToggle" class="absolute top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition duration-300">
+            <svg id="sunIcon" class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h1M3 12H2m15.325-7.757l-.707-.707M6.343 17.657l-.707.707M16.95 7.05l.707-.707M7.05 16.95l-.707.707M12 7a5 5 0 100 10 5 5 0 000-10z"></path>
+            </svg>
+            <svg id="moonIcon" class="h-6 w-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+            </svg>
+        </button>
+
+        <div class="text-center mb-8">
+            <a href="../index.html" class="text-4xl font-bold text-indigo-700 hover:text-indigo-900 transition duration-300 ease-in-out font-orbitron">
+                Rekru.AI
+            </a>
+            <h2 class="text-3xl font-bold text-gray-800 mt-6">Create Your Account</h2>
+            <p class="text-gray-600 mt-2">Join Rekru.AI today and streamline your IT talent acquisition!</p>
+        </div>
+
+        <form id="signupForm" class="space-y-6">
+            <div>
+                <label for="email" class="block text-gray-700 text-sm font-semibold mb-2">Email Address</label>
+                <input type="email" id="email" name="email" placeholder="you@example.com" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+            </div>
+            <div>
+                <label for="password" class="block text-gray-700 text-sm font-semibold mb-2">Password</label>
+                <input type="password" id="password" name="password" placeholder="********" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+            </div>
+            <div>
+                <label for="confirmPassword" class="block text-gray-700 text-sm font-semibold mb-2">Confirm Password</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" placeholder="********" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+            </div>
+            <p id="signupError" class="text-red-500 text-sm text-center"></p>
+            <button type="submit" class="w-full bg-indigo-700 text-white py-3 rounded-md font-semibold hover:bg-indigo-800 transition duration-300 ease-in-out shadow-md transform hover:scale-105">
+                Sign Up
+            </button>
+        </form>
+
+        <p class="text-center text-gray-600 mt-6">
+            Already have an account? <a href="login.html" class="text-indigo-600 hover:underline font-medium">Login</a>
+        </p>
+    </div>
+</body>
+</html>

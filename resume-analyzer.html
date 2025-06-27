@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rekru.AI - Resume Analyzer</title>
+    <!-- Tailwind CSS CDN for easy styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Mammoth.js for DOCX parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.4.1/mammoth.browser.min.js"></script>
+    <style>
+        /* Custom font for a modern look */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Smooth scrolling for anchor links */
+        html {
+            scroll-behavior: smooth;
+        }
+        /* Style for the drag-and-drop area */
+        .drop-zone {
+            border: 2px dashed #cbd5e0; /* gray-300 */
+            border-radius: 0.5rem; /* rounded-md */
+            padding: 2rem;
+            text-align: center;
+            background-color: #f8fafc; /* gray-50 */
+            transition: all 0.2s ease-in-out;
+        }
+        .drop-zone.hover {
+            border-color: #4f46e5; /* indigo-600 */
+            background-color: #e0e7ff; /* indigo-100 */
+        }
+        /* Loading spinner animation (for single analyzer) */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .animate-spin-custom {
+            animation: spin 1s linear infinite;
+        }
+        /* Dark Mode Styles */
+        html.dark {
+            background-color: #0c0a09; /* zinc-950 - very dark grey/black */
+            color: #e2e8f0; /* light gray text */
+        }
+        html.dark body {
+            background-color: #0c0a09;
+            color: #e2e8f0;
+        }
+        html.dark header {
+            background-color: #1a202c; /* darker header */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.24);
+        }
+        html.dark nav a {
+            color: #a0aec0; /* lighter gray links */
+            transition: color 0.3s ease-in-out;
+        }
+        html.dark nav a:hover {
+            color: #667eea; /* indigo-400 hover */
+        }
+        html.dark section {
+            background-color: #1a202c; /* darker section background */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.24);
+        }
+        html.dark .bg-gray-100 { /* Used for internal sections/cards */
+            background-color: #1a202c; /* darker gray-100 */
+        }
+        html.dark .bg-white { /* Used for cards/inner elements */
+            background-color: #2d3748; /* darker white */
+        }
+        html.dark .bg-gray-50 { /* Used for contact form/benefits */
+            background-color: #2d3748; /* darker gray-50 */
+        }
+        html.dark .text-gray-800 {
+            color: #e2e8f0;
+        }
+        html.dark .text-gray-700 {
+            color: #cbd5e0;
+        }
+        html.dark .text-gray-600 {
+            color: #a0aec0;
+        }
+        html.dark .text-gray-500 {
+            color: #718096;
+        }
+        html.dark .text-indigo-700 { /* Rekru.AI logo, saved JD links */
+            color: #7c3aed; /* violet-600 */
+        }
+        html.dark .text-indigo-800 { /* Section headings */
+            color: #9f7aea; /* purple-400 */
+        }
+        html.dark .text-purple-700 { /* Analyze Candidates button */
+            color: #d8b4fe; /* purple-300 */
+        }
+        html.dark .border-gray-400 { /* Analyzer left column border */
+            border-color: #4a5568; /* darker gray border */
+        }
+        html.dark .drop-zone {
+            background-color: #2d3748; /* darker background */
+            border-color: #667eea; /* indigo-400 */
+        }
+        html.dark .drop-zone.hover {
+            border-color: #8b5cf6; /* purple-500 */
+            background-color: #3a475a; /* slightly lighter dark */
+        }
+        html.dark input, html.dark textarea, html.dark select {
+            background-color: #4a5568; /* darker input background */
+            border-color: #667eea; /* indigo-400 */
+            color: #e2e8f0; /* light text */
+        }
+        html.dark input::placeholder, html.dark textarea::placeholder {
+            color: #a0aec0; /* lighter placeholder */
+        }
+        html.dark .bg-white.p-3.rounded-md.shadow-sm { /* For saved job description list items */
+            background-color: #2d3748; /* darker */
+        }
+        html.dark .bg-white.p-2.rounded-md.shadow-sm { /* For required skills list items */
+            background-color: #2d3748; /* darker */
+        }
+        html.dark .bg-white.p-6.rounded-lg.shadow-inner { /* For results display */
+            background-color: #2d3748; /* darker */
+        }
+        html.dark .bg-gray-50.p-6.rounded-lg.shadow-inner { /* For batch results display */
+            background-color: #2d3748; /* darker */
+        }
+        html.dark footer {
+            background-color: #1a202c; /* darker footer */
+        }
+        html.dark .progress-bar-container {
+            background-color: #4a5568; /* darker progress bar background */
+        }
+        html.dark .progress-bar-fill {
+            background-color: #9f7aea; /* purple-400 */
+            color: white; /* Ensure text is readable on purple */
+        }
+        /* Dropdown specific styles */
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            /* Centering the dropdown */
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            text-align: left;
+        }
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+        html.dark .dropdown-content {
+            background-color: #2d3748; /* darker */
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.4);
+        }
+        html.dark .dropdown-content a {
+            color: #e2e8f0; /* light text */
+        }
+        html.dark .dropdown-content a:hover {
+            background-color: #4a5568; /* darker hover */
+        }
+        /* Specific border colors for service cards to match original theme */
+        .border-indigo-500 { border-color: #6366f1; }
+        .border-purple-500 { border-color: #a855f7; }
+        .border-pink-500 { border-color: #ec4899; }
+        .border-blue-500 { border-color: #3b82f6; }
+        .border-green-500 { border-color: #22c55e; }
+        .border-yellow-500 { border-color: #eab308; }
+        .border-orange-500 { border-color: #f97316; }
+        .border-cyan-500 { border-color: #06b6d4; }
+        .border-red-500 { border-color: #ef4444; }
+        .border-lime-600 { border-color: #65a30d; } /* For success buttons */
+        .border-yellow-600 { border-color: #ca8a04; } /* For add skill button */
+
+        /* Centering navigation items */
+        .header-nav-list {
+            display: flex;
+            justify-content: center; /* Center the ul content */
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            width: 100%; /* Take full width to allow centering */
+        }
+    </style>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase variables (Canvas provides these)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        let app, db, auth, userId;
+
+        // Initialize Firebase and authenticate
+        async function initializeFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("Firebase authenticated. User ID:", userId);
+                        // Load saved job descriptions and required skills after authentication
+                        loadSavedJobDescriptions();
+                        loadRequiredSkills();
+                    } else {
+                        try {
+                            // Attempt to sign in with custom token if available
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                // Fallback to anonymous sign-in if no custom token
+                                const anonymousUser = await signInAnonymously(auth);
+                                userId = anonymousUser.user.uid;
+                                console.log("Signed in anonymously. User ID:", userId);
+                                loadSavedJobDescriptions();
+                                loadRequiredSkills();
+                            }
+                        } catch (authError) {
+                            console.error("Error signing in with custom token, falling back to anonymous:", authError);
+                            // If custom token sign-in fails, try anonymous sign-in
+                            const anonymousUser = await signInAnonymously(auth);
+                            userId = anonymousUser.user.uid;
+                            console.log("Signed in anonymously after custom token failure. User ID:", userId);
+                            loadSavedJobDescriptions();
+                            loadRequiredSkills();
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+            }
+        }
+
+        initializeFirebase();
+
+        // --- Firestore Functions for Saved Job Descriptions (Single Analyzer) ---
+        window.saveJobDescription = async () => {
+            if (!userId) {
+                console.error("User not authenticated. Cannot save job description.");
+                return;
+            }
+
+            const jobDescriptionName = document.getElementById('newJobDescriptionName').value.trim();
+            const jobDescriptionText = document.getElementById('jobRequirements').value.trim();
+
+            if (!jobDescriptionName || !jobDescriptionText) {
+                displayMessageBox('Please provide both a name and text for the job description.', 'error');
+                return;
+            }
+
+            try {
+                const jobDescriptionsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/job_descriptions`);
+                await addDoc(jobDescriptionsCollectionRef, {
+                    name: jobDescriptionName,
+                    text: jobDescriptionText,
+                    createdAt: new Date()
+                });
+                document.getElementById('newJobDescriptionName').value = ''; // Clear input
+                displayMessageBox('Job description saved successfully!', 'info');
+                loadSavedJobDescriptions(); // Refresh the list
+            } catch (error) {
+                console.error("Error saving job description:", error);
+                displayMessageBox(`Error saving job description: ${error.message}`, 'error');
+            }
+        };
+
+        window.loadSavedJobDescriptions = async () => {
+            if (!userId) {
+                console.log("User not authenticated yet. Skipping loading job descriptions.");
+                return;
+            }
+
+            const savedJobDescriptionsList = document.getElementById('savedJobDescriptionsList');
+            savedJobDescriptionsList.innerHTML = '<p class="text-gray-500 text-sm">Loading saved job descriptions...</p>';
+
+            try {
+                const jobDescriptionsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/job_descriptions`);
+                const q = query(jobDescriptionsCollectionRef);
+                const querySnapshot = await getDocs(q);
+
+                savedJobDescriptionsList.innerHTML = ''; // Clear loading message
+
+                if (querySnapshot.empty) {
+                    savedJobDescriptionsList.innerHTML = '<p class="text-gray-500 text-sm">No saved job descriptions yet.</p>';
+                } else {
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center bg-white p-3 rounded-md shadow-sm mb-2 hover:bg-gray-100 transition duration-150';
+                        li.innerHTML = `
+                            <span class="cursor-pointer text-indigo-700 font-medium flex-grow text-left" data-id="${doc.id}" data-text="${encodeURIComponent(data.text)}">${data.name}</span>
+                            <button class="ml-4 text-red-500 hover:text-red-700 transition duration-150" onclick="confirmDeleteJobDescription('${doc.id}')">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 01-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        `;
+                        li.querySelector('span').addEventListener('click', (e) => {
+                            document.getElementById('jobRequirements').value = decodeURIComponent(e.target.dataset.text);
+                            document.getElementById('newJobDescriptionName').value = e.target.textContent.trim(); // Populate name field too
+                        });
+                        savedJobDescriptionsList.appendChild(li);
+                    });
+                }
+            } catch (error) {
+                console.error("Error loading job descriptions:", error);
+                savedJobDescriptionsList.innerHTML = '<p class="text-red-500 text-sm">Error loading job descriptions.</p>';
+            }
+        };
+
+        // Custom confirmation dialog for delete
+        window.confirmDeleteJobDescription = (docId) => {
+            const messageBox = document.getElementById('messageBox');
+            const messageBoxText = document.getElementById('messageBoxText');
+            const messageBoxConfirm = document.getElementById('messageBoxConfirm');
+            const messageBoxCancel = document.getElementById('messageBoxCancel');
+            const messageBoxClose = document.getElementById('messageBoxClose');
+
+            messageBoxText.textContent = "Are you sure you want to delete this job description?";
+            messageBoxConfirm.classList.remove('hidden');
+            messageBoxCancel.classList.remove('hidden');
+            messageBoxClose.classList.add('hidden');
+
+            messageBoxConfirm.onclick = () => {
+                deleteJobDescription(docId);
+                messageBox.classList.add('hidden');
+            };
+            messageBoxCancel.onclick = () => {
+                messageBox.classList.add('hidden');
+            };
+            messageBox.classList.remove('hidden');
+        };
+
+        window.deleteJobDescription = async (docId) => {
+            if (!userId) {
+                console.error("User not authenticated. Cannot delete job description.");
+                return;
+            }
+
+            try {
+                const docRef = doc(db, `artifacts/${appId}/users/${userId}/job_descriptions`, docId);
+                await deleteDoc(docRef);
+                displayMessageBox('Job description deleted successfully!', 'info');
+                loadSavedJobDescriptions(); // Refresh the list
+            } catch (error) {
+                console.error("Error deleting job description:", error);
+                displayMessageBox(`Error deleting job description: ${error.message}`, 'error');
+            }
+        };
+
+        // --- Firestore Functions for Required Skills (Single Analyzer) ---
+        window.addRequiredSkill = async () => {
+            if (!userId) {
+                console.error("User not authenticated. Cannot add skill.");
+                return;
+            }
+
+            const skillName = document.getElementById('newSkillInput').value.trim();
+            if (!skillName) {
+                displayMessageBox('Please enter a skill to add.', 'error');
+                return;
+            }
+
+            try {
+                const skillsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/required_skills`);
+                await addDoc(skillsCollectionRef, {
+                    name: skillName,
+                    createdAt: new Date()
+                });
+                document.getElementById('newSkillInput').value = ''; // Clear input
+                displayMessageBox('Skill added successfully!', 'info');
+                loadRequiredSkills(); // Refresh the list
+            } catch (error) {
+                console.error("Error adding skill:", error);
+                displayMessageBox(`Error adding skill: ${error.message}`, 'error');
+            }
+        };
+
+        window.loadRequiredSkills = async () => {
+            if (!userId) {
+                console.log("User not authenticated yet. Skipping loading skills.");
+                return;
+            }
+
+            const requiredSkillsList = document.getElementById('requiredSkillsList');
+            requiredSkillsList.innerHTML = '<p class="text-gray-500 text-sm">Loading skills...</p>';
+
+            try {
+                const skillsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/required_skills`);
+                const q = query(skillsCollectionRef);
+                const querySnapshot = await getDocs(q);
+
+                requiredSkillsList.innerHTML = ''; // Clear loading message
+
+                if (querySnapshot.empty) {
+                    requiredSkillsList.innerHTML = '<p class="text-gray-500 text-sm">No required skills added yet.</p>';
+                } else {
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center bg-white p-2 rounded-md shadow-sm mb-1 text-sm hover:bg-gray-100 transition duration-150';
+                        li.innerHTML = `
+                            <span class="text-gray-700 font-medium flex-grow text-left">${data.name}</span>
+                            <button class="ml-2 text-red-500 hover:text-red-700 transition duration-150" onclick="confirmDeleteRequiredSkill('${doc.id}')">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 01-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        `;
+                        requiredSkillsList.appendChild(li);
+                    });
+                }
+            } catch (error) {
+                console.error("Error loading skills:", error);
+                requiredSkillsList.innerHTML = '<p class="text-red-500 text-sm">Error loading skills.</p>';
+            }
+        };
+
+        window.confirmDeleteRequiredSkill = (docId) => {
+            const messageBox = document.getElementById('messageBox');
+            const messageBoxText = document.getElementById('messageBoxText');
+            const messageBoxConfirm = document.getElementById('messageBoxConfirm');
+            const messageBoxCancel = document.getElementById('messageBoxCancel');
+            const messageBoxClose = document.getElementById('messageBoxClose');
+
+            messageBoxText.textContent = "Are you sure you want to delete this skill?";
+            messageBoxConfirm.classList.remove('hidden');
+            messageBoxCancel.classList.remove('hidden');
+            messageBoxClose.classList.add('hidden');
+
+            messageBoxConfirm.onclick = () => {
+                deleteRequiredSkill(docId);
+                messageBox.classList.add('hidden');
+            };
+            messageBoxCancel.onclick = () => {
+                messageBox.classList.add('hidden');
+            };
+            messageBox.classList.remove('hidden');
+        };
+
+        window.deleteRequiredSkill = async (docId) => {
+            if (!userId) {
+                console.error("User not authenticated. Cannot delete skill.");
+                return;
+            }
+
+            try {
+                const docRef = doc(db, `artifacts/${appId}/users/${userId}/required_skills`, docId);
+                await deleteDoc(docRef);
+                displayMessageBox('Skill deleted successfully!', 'info');
+                loadRequiredSkills(); // Refresh the list
+            } catch (error) {
+                console.error("Error deleting skill:", error);
+                displayMessageBox(`Error deleting skill: ${error.message}`, 'error');
+            }
+        };
+
+        // Custom message box display function (retained from previous version)
+        window.displayMessageBox = (message, type = 'info') => {
+            const messageBox = document.getElementById('messageBox');
+            const messageBoxText = document.getElementById('messageBoxText');
+            const messageBoxConfirm = document.getElementById('messageBoxConfirm');
+            const messageBoxCancel = document.getElementById('messageBoxCancel');
+            const messageBoxClose = document.getElementById('messageBoxClose');
+
+            messageBoxText.textContent = message;
+            if (type === 'info' || type === 'error') {
+                messageBoxConfirm.classList.add('hidden');
+                messageBoxCancel.classList.add('hidden');
+                messageBoxClose.classList.remove('hidden');
+                messageBoxClose.focus(); // Set focus to the close button
+            } else { // For confirmation dialogs
+                messageBoxConfirm.classList.remove('hidden');
+                messageBoxCancel.classList.remove('hidden');
+                messageBoxClose.classList.add('hidden');
+                messageBoxConfirm.focus(); // Set focus to the confirm button
+            }
+
+            messageBoxClose.onclick = () => {
+                messageBox.classList.add('hidden');
+            };
+
+            messageBox.className = `fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4 ${type === 'error' ? 'border-red-500' : 'border-indigo-500'}`;
+            messageBox.classList.remove('hidden');
+        };
+    </script>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <!-- Header Section -->
+    <header class="bg-white shadow-md p-4 sticky top-0 z-50 rounded-b-lg">
+        <div class="container mx-auto flex justify-between items-center flex-wrap">
+            <!-- Agency Logo/Name -->
+            <a href="index.html" class="text-3xl font-bold text-indigo-700 hover:text-indigo-900 transition duration-300 ease-in-out">
+                Rekru.AI
+            </a>
+            <!-- Navigation Menu -->
+            <nav class="mt-4 md:mt-0 flex items-center flex-grow justify-center">
+                <ul class="flex space-x-6 header-nav-list">
+                    <li><a href="index.html#about" class="text-gray-600 hover:text-indigo-700 font-medium transition duration-300 ease-in-out rounded-md px-3 py-2">About Us</a></li>
+                    <li><a href="index.html#services" class="text-gray-600 hover:text-indigo-700 font-medium transition duration-300 ease-in-out rounded-md px-3 py-2">Services</a></li>
+                    
+                    <!-- Features Dropdown -->
+                    <li class="relative dropdown">
+                        <button class="text-gray-600 hover:text-indigo-700 font-medium transition duration-300 ease-in-out rounded-md px-3 py-2 flex items-center">
+                            Features
+                            <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="dropdown-content absolute mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+                            <a href="resume-analyzer.html" target="_blank" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Resume Analyzer</a>
+                            <a href="advanced-analyzer.html" target="_blank" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Advanced Analyzer</a>
+                            <a href="jd-generator.html" target="_blank" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Job Description Generator</a>
+                            <a href="ai-sourcer.html" target="_blank" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">AI Sourcer/Contact Manager</a>
+                            <a href="jd-poster.html" target="_blank" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Posting JD in my Platforms</a>
+                        </div>
+                    </li>
+                    <li><a href="index.html#contact" class="text-gray-600 hover:text-indigo-700 font-medium transition duration-300 ease-in-out rounded-md px-3 py-2">Contact</a></li>
+                </ul>
+
+                <!-- Dark Mode Toggle -->
+                <button id="darkModeToggle" class="ml-6 p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition duration-300">
+                    <svg id="sunIcon" class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h1M3 12H2m15.325-7.757l-.707-.707M6.343 17.657l-.707.707M16.95 7.05l.707-.707M7.05 16.95l-.707.707M12 7a5 5 0 100 10 5 5 0 000-10z"></path>
+                    </svg>
+                    <svg id="moonIcon" class="h-6 w-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                </button>
+
+                <!-- Language Selector -->
+                <div class="relative dropdown ml-4">
+                    <button class="text-gray-600 hover:text-indigo-700 font-medium transition duration-300 ease-in-out rounded-md px-3 py-2 flex items-center">
+                        Language
+                        <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="dropdown-content absolute right-0 mt-2 w-32 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+                        <a href="#" onclick="changeLanguage('en')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">English</a>
+                        <a href="#" onclick="changeLanguage('es')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Español</a>
+                        <a href="#" onclick="changeLanguage('pt')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Português</a>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- AI Resume Analyzer Section (Integrated) -->
+    <section id="resume-analyzer" class="py-16 px-4 bg-gray-100 rounded-xl shadow-lg mx-auto max-w-5xl mt-12">
+        <div class="container mx-auto text-center">
+            <h2 class="text-4xl font-bold text-indigo-800 mb-8">AI Resume Analyzer</h2>
+            <p class="text-lg text-gray-700 mb-10 max-w-3xl mx-auto">
+                Upload a resume and provide the job requirements. Our AI will analyze the profile, check for matches, summarize key information, and provide a recruiter's perspective.
+            </p>
+
+            <div class="flex flex-col md:flex-row gap-8">
+                <!-- Left Column: Saved Job Descriptions & Required Skills (Single Analyzer) -->
+                <div class="w-full md:w-1/3 bg-gray-50 p-6 rounded-lg shadow-md border-t-4 border-gray-400">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Saved Job Descriptions</h3>
+                    <div class="mb-6">
+                        <input type="text" id="newJobDescriptionName" placeholder="Name for this job description" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 mb-2">
+                        <button onclick="saveJobDescription()" class="w-full bg-green-600 text-white py-2 rounded-md font-semibold hover:bg-green-700 transition duration-300 ease-in-out shadow-md">Save Current Description</button>
+                    </div>
+
+                    <ul id="savedJobDescriptionsList" class="space-y-2 mb-8">
+                        <p class="text-gray-500 text-sm">Loading saved job descriptions...</p>
+                    </ul>
+
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Required Skills</h3>
+                    <div class="mb-4">
+                        <input type="text" id="newSkillInput" placeholder="Add a required skill" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 mb-2">
+                        <button onclick="addRequiredSkill()" class="w-full bg-blue-600 text-white py-2 rounded-md font-semibold hover:bg-blue-700 transition duration-300 ease-in-out shadow-md">Add Skill</button>
+                    </div>
+                    <ul id="requiredSkillsList" class="space-y-2">
+                        <p class="text-gray-500 text-sm">Loading skills...</p>
+                    </ul>
+                </div>
+
+                <!-- Right Column: Analyzer Inputs and Results (Single Analyzer) -->
+                <div class="w-full md:w-2/3 bg-gray-50 p-8 rounded-lg shadow-md">
+                    <div class="mb-6 text-left">
+                        <label for="resumeFile" class="block text-gray-700 text-lg font-semibold mb-2">Upload Resume (PDF, DOCX, TXT):</label>
+                        <!-- Drag and Drop Zone -->
+                        <div id="dropZone" class="drop-zone mb-4 cursor-pointer">
+                            <p class="text-gray-600">Drag & Drop your resume here, or</p>
+                            <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.txt" class="hidden">
+                            <button type="button" id="browseButton" class="mt-2 bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 transition duration-300">Browse Files</button>
+                            <p id="fileNameDisplay" class="mt-2 text-sm text-gray-500"></p>
+                        </div>
+                    </div>
+
+                    <div class="mb-6 text-left">
+                        <label for="jobRequirements" class="block text-gray-700 text-lg font-semibold mb-2">Job Requirements (Overall Description):</label>
+                        <textarea id="jobRequirements" rows="8" placeholder="e.g., 'Seeking a Senior Software Engineer with a strong background in cloud-native applications and microservices architecture. Experience with large-scale distributed systems is a plus.'" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    </div>
+                    <button id="analyzeButton" class="w-full bg-indigo-700 text-white py-3 rounded-md font-semibold hover:bg-indigo-800 transition duration-300 ease-in-out shadow-md transform hover:scale-105">
+                        Analyze Resume
+                    </button>
+
+                    <div id="loadingIndicator" class="mt-8 text-center hidden">
+                        <div class="animate-spin-custom rounded-full h-12 w-12 border-b-2 border-indigo-700 mx-auto"></div>
+                        <p class="mt-4 text-indigo-700 font-medium">Analyzing resume, please wait...</p>
+                    </div>
+
+                    <div id="resultsDisplay" class="mt-8 text-left bg-white p-6 rounded-lg shadow-inner hidden">
+                        <h3 class="text-2xl font-bold text-indigo-800 mb-4">Analysis Results:</h3>
+                        <div id="matchStatus" class="mb-4 p-3 rounded-md font-bold text-center text-white text-xl"></div>
+                        <div id="profileSummary" class="mb-4 text-gray-700 leading-relaxed"></div>
+                        <div id="requiredSkillsCheck" class="mb-4"></div> <!-- New section for required skills check -->
+                        <div id="matchScore" class="mb-4"></div>
+                        <div id="recruiterAnalysis" class="text-gray-700 leading-relaxed"></div>
+                    </div>
+                    <div id="errorMessage" class="mt-4 text-red-600 font-medium hidden"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer Section -->
+    <footer class="bg-gray-800 text-white py-8 mt-12 rounded-t-lg">
+        <div class="container mx-auto text-center text-sm">
+            <p>&copy; 2025 Rekru.AI. All rights reserved.</p>
+            <p class="mt-2">Innovating Talent Acquisition with Intelligence.</p>
+        </div>
+    </footer>
+
+    <!-- Custom Message Box (for alerts/confirms) -->
+    <div id="messageBox" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center border-t-4 border-indigo-500">
+            <p id="messageBoxText" class="text-lg font-semibold text-gray-800 mb-4"></p>
+            <div class="flex justify-center space-x-4">
+                <button id="messageBoxConfirm" class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition duration-300 hidden">Confirm</button>
+                <button id="messageBoxCancel" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400 transition duration-300 hidden">Cancel</button>
+                <button id="messageBoxClose" class="bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 transition duration-300 hidden">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const resumeFile = document.getElementById('resumeFile');
+            const jobRequirements = document.getElementById('jobRequirements');
+            const analyzeButton = document.getElementById('analyzeButton');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const resultsDisplay = document.getElementById('resultsDisplay');
+            const profileSummary = document.getElementById('profileSummary');
+            const matchScoreDisplay = document.getElementById('matchScore');
+            const recruiterAnalysis = document.getElementById('recruiterAnalysis');
+            const errorMessage = document.getElementById('errorMessage');
+            const dropZone = document.getElementById('dropZone');
+            const browseButton = document.getElementById('browseButton');
+            const fileNameDisplay = document.getElementById('fileNameDisplay');
+            const matchStatus = document.getElementById('matchStatus');
+
+            // Elements for saved job descriptions (single analyzer)
+            const newJobDescriptionName = document.getElementById('newJobDescriptionName');
+            const savedJobDescriptionsList = document.getElementById('savedJobDescriptionsList');
+
+            // Elements for required skills (single analyzer)
+            const newSkillInput = document.getElementById('newSkillInput');
+            const requiredSkillsList = document.getElementById('requiredSkillsList');
+            const requiredSkillsCheck = document.getElementById('requiredSkillsCheck'); // New element for displaying skill check results
+
+            let uploadedFile = null; // For single analyzer
+
+            // --- Dark Mode Functionality ---
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const sunIcon = document.getElementById('sunIcon');
+            const moonIcon = document.getElementById('moonIcon');
+
+            function applyDarkMode(isDark) {
+                if (isDark) {
+                    document.documentElement.classList.add('dark');
+                    sunIcon.classList.add('hidden');
+                    moonIcon.classList.remove('hidden');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    sunIcon.classList.remove('hidden');
+                    moonIcon.classList.add('hidden');
+                }
+            }
+
+            // Check for saved dark mode preference
+            const savedDarkMode = localStorage.getItem('darkMode');
+            if (savedDarkMode === 'true') {
+                applyDarkMode(true);
+            } else {
+                applyDarkMode(false);
+            }
+
+            darkModeToggle.addEventListener('click', () => {
+                const isDark = document.documentElement.classList.contains('dark');
+                applyDarkMode(!isDark);
+                localStorage.setItem('darkMode', !isDark);
+            });
+
+            // --- Language Settings Functionality ---
+            window.changeLanguage = (langCode) => {
+                document.documentElement.lang = langCode;
+                localStorage.setItem('language', langCode);
+                // In a real application, you would load translation files here
+                displayMessageBox(`Language set to: ${langCode.toUpperCase()}`, 'info');
+            };
+
+            // Apply saved language preference
+            const savedLanguage = localStorage.getItem('language');
+            if (savedLanguage) {
+                document.documentElement.lang = savedLanguage;
+            }
+
+            // --- Dropdown Menu Functionality ---
+            document.querySelectorAll('.dropdown').forEach(dropdown => {
+                const button = dropdown.querySelector('button');
+                const content = dropdown.querySelector('.dropdown-content');
+
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation(); // Prevent closing immediately if another dropdown is clicked
+                    // Close other open dropdowns
+                    document.querySelectorAll('.dropdown-content').forEach(otherContent => {
+                        if (otherContent !== content) {
+                            otherContent.style.display = 'none';
+                        }
+                    });
+                    content.style.display = content.style.display === 'block' ? 'none' : 'block';
+                });
+
+                // Close dropdown if clicked outside
+                document.addEventListener('click', (event) => {
+                    if (!dropdown.contains(event.target)) {
+                        content.style.display = 'none';
+                    }
+                });
+            });
+
+
+            // --- Custom Message Box Functions (retained) ---
+            window.displayMessageBox = (message, type = 'info') => {
+                const messageBox = document.getElementById('messageBox');
+                const messageBoxText = document.getElementById('messageBoxText');
+                const messageBoxConfirm = document.getElementById('messageBoxConfirm');
+                const messageBoxCancel = document.getElementById('messageBoxCancel');
+                const messageBoxClose = document.getElementById('messageBoxClose');
+
+                messageBoxText.textContent = message;
+                if (type === 'info' || type === 'error') {
+                    messageBoxConfirm.classList.add('hidden');
+                    messageBoxCancel.classList.add('hidden');
+                    messageBoxClose.classList.remove('hidden');
+                    messageBoxClose.focus(); // Set focus to the close button
+                } else { // For confirmation dialogs
+                    messageBoxConfirm.classList.remove('hidden');
+                    messageBoxCancel.classList.remove('hidden');
+                    messageBoxClose.classList.add('hidden');
+                    messageBoxConfirm.focus(); // Set focus to the confirm button
+                }
+
+                messageBoxClose.onclick = () => {
+                    messageBox.classList.add('hidden');
+                };
+
+                messageBox.className = `fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4 ${type === 'error' ? 'border-red-500' : 'border-indigo-500'}`;
+                messageBox.classList.remove('hidden');
+            };
+
+            // --- Single Resume Analyzer Logic ---
+            // Handle file input change for single analyzer
+            resumeFile.addEventListener('change', (event) => {
+                uploadedFile = event.target.files[0];
+                if (uploadedFile) {
+                    fileNameDisplay.textContent = `Selected file: ${uploadedFile.name}`;
+                } else {
+                    fileNameDisplay.textContent = '';
+                }
+            });
+
+            // Handle browse button click for single analyzer
+            browseButton.addEventListener('click', () => {
+                resumeFile.click();
+            });
+
+            // Drag and Drop functionality for single analyzer
+            dropZone.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                dropZone.classList.add('hover');
+                console.log('Dragover on single drop zone'); // Debugging log
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('hover');
+                console.log('Dragleave on single drop zone'); // Debugging log
+            });
+
+            dropZone.addEventListener('drop', (event) => {
+                event.preventDefault();
+                dropZone.classList.remove('hover');
+
+                const files = event.dataTransfer.files;
+                console.log('Drop on single drop zone. Files:', files); // Debugging log
+                if (files.length > 0) {
+                    uploadedFile = files[0];
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(uploadedFile);
+                    resumeFile.files = dataTransfer.files;
+
+                    fileNameDisplay.textContent = `Selected file: ${uploadedFile.name}`;
+                    console.log('Single file selected:', uploadedFile.name); // Debugging log
+                } else {
+                    console.log('No files dropped on single drop zone.'); // Debugging log
+                }
+            });
+
+            analyzeButton.addEventListener('click', async () => {
+                const file = uploadedFile;
+                const overallRequirements = jobRequirements.value.trim();
+                
+                // Get all required skills from the list
+                const skillsElements = Array.from(requiredSkillsList.querySelectorAll('span'));
+                const requiredSkillsArray = skillsElements.map(span => span.textContent.trim());
+                const requiredSkillsString = requiredSkillsArray.length > 0 ? `Explicitly required skills: ${requiredSkillsArray.join(', ')}.` : '';
+
+                // Combine overall requirements with explicit required skills for the AI prompt
+                const combinedRequirements = `${overallRequirements}\n\n${requiredSkillsString}`.trim();
+
+
+                resultsDisplay.classList.add('hidden');
+                errorMessage.classList.add('hidden');
+                profileSummary.innerHTML = '';
+                matchScoreDisplay.innerHTML = '';
+                recruiterAnalysis.innerHTML = '';
+                matchStatus.innerHTML = '';
+                matchStatus.className = 'mb-4 p-3 rounded-md font-bold text-center text-white text-xl'; // Reset classes
+                requiredSkillsCheck.innerHTML = ''; // Clear previous required skills check results
+
+                if (!file) {
+                    errorMessage.textContent = 'Please upload a resume file by browsing or dragging and dropping.';
+                    errorMessage.classList.remove('hidden');
+                    return;
+                }
+
+                if (!combinedRequirements) {
+                    errorMessage.textContent = 'Please enter job requirements or add some required skills.';
+                    errorMessage.classList.remove('hidden');
+                    return;
+                }
+
+                loadingIndicator.classList.remove('hidden'); // Show loading indicator
+
+                try {
+                    let resumeContentParts = [];
+                    let fileType = file.type;
+
+                    if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx')) {
+                        // Handle .docx files using mammoth.js
+                        const arrayBuffer = await file.arrayBuffer();
+                        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                        const docxText = result.value; // The raw text extracted from the DOCX
+
+                        if (!docxText || docxText.trim().length === 0) {
+                            errorMessage.textContent = 'Could not extract text from the DOCX file. It might be empty or corrupted. Please try another file or convert it to PDF/TXT.';
+                            errorMessage.classList.remove('hidden');
+                            loadingIndicator.classList.add('hidden');
+                            return;
+                        }
+                        // Send extracted text as a text part
+                        resumeContentParts.push({ text: `Extracted text from DOCX:\n${docxText}` });
+                        fileType = 'text/plain'; // Treat as plain text for the AI prompt
+                    } else if (fileType === 'application/pdf' || fileType.startsWith('text/')) {
+                        // Handle PDF and plain text files as inlineData
+                        const reader = new FileReader();
+                        reader.readAsDataURL(file);
+                        await new Promise((resolve, reject) => {
+                            reader.onload = () => {
+                                const base64Data = reader.result.split(',')[1];
+                                resumeContentParts.push({
+                                    inlineData: {
+                                        mimeType: fileType,
+                                        data: base64Data
+                                    }
+                                });
+                                resolve();
+                            };
+                            reader.onerror = reject;
+                        });
+                    } else {
+                        errorMessage.textContent = 'Unsupported file type. Please upload a PDF, DOCX, or TXT file.';
+                        errorMessage.classList.remove('hidden');
+                        loadingIndicator.classList.add('hidden');
+                        return;
+                    }
+
+                    let chatHistory = [];
+                    // Prompt adjusted to handle pre-extracted text or inline data, and explicitly ask about required skills and years of experience
+                    const prompt = `You are an expert resume analyzer. Analyze the provided resume content against the given job requirements. The resume content will either be embedded directly as a document or provided as extracted plain text.
+
+                    Job Requirements:
+                    ${combinedRequirements}
+
+                    Resume Content:
+
+                    Please provide a structured JSON response with the following fields:
+                    - "profileSummary": A concise summary of the candidate's professional profile based on the resume content.
+                    - "matchScore": A percentage score indicating how well the resume content matches the job requirements. (e.g., 85 for 85%)
+                    - "matchedSkills": An array of skills from the resume content that directly match the job requirements, especially focusing on the explicitly required skills if provided.
+                    - "missingSkills": An array of key skills from the job requirements (especially the explicitly required skills) that are not clearly present in the resume content.
+                    - "yearsOfExperience": A numerical value representing the total years of relevant professional experience clearly stated or inferable from the resume. If experience is not explicitly stated or cannot be reasonably inferred (e.g., only academic projects, no dates), return 0. Focus on full-time professional roles.
+                    - "recruiterAnalysis": A detailed analysis from a recruiter's perspective, including strengths, weaknesses, and overall suitability for the role, based on the resume content.`;
+
+                    // Combine the prompt with the resume content parts
+                    chatHistory.push({
+                        role: "user",
+                        parts: [{ text: prompt }].concat(resumeContentParts)
+                    });
+
+                    const payload = {
+                        contents: chatHistory,
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    "profileSummary": { "type": "STRING" },
+                                    "matchScore": { "type": "NUMBER" },
+                                    "matchedSkills": {
+                                        "type": "ARRAY",
+                                        "items": { "type": "STRING" }
+                                    },
+                                    "missingSkills": {
+                                        "type": "ARRAY",
+                                        "items": { "type": "STRING" }
+                                    },
+                                    "yearsOfExperience": { "type": "NUMBER" }, // Added years of experience
+                                    "recruiterAnalysis": { "type": "STRING" }
+                                },
+                                "propertyOrdering": ["profileSummary", "matchScore", "matchedSkills", "missingSkills", "yearsOfExperience", "recruiterAnalysis"]
+                            }
+                        }
+                    };
+
+                    const apiKey = "";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const jsonText = result.candidates[0].content.parts[0].text;
+                        
+                        if (!jsonText || typeof jsonText !== 'string' || jsonText.trim().length < 50) {
+                            errorMessage.textContent = 'The AI could not generate a valid structured response. This might happen if the document content was too sparse or complex for analysis. Please try a different document or format.';
+                            errorMessage.classList.remove('hidden');
+                            console.error("AI returned empty or very short text for document processing:", jsonText);
+                            loadingIndicator.classList.add('hidden');
+                            return;
+                        }
+
+                        let parsedJson;
+                        try {
+                            parsedJson = JSON.parse(jsonText);
+                        } catch (parseError) {
+                            errorMessage.textContent = `Error parsing AI response: The AI did not return a valid JSON structure. Please try again, or consider simplifying the job requirements. Raw response: ${jsonText}`;
+                            errorMessage.classList.remove('hidden');
+                            console.error("JSON parse error:", parseError);
+                            console.error("Raw AI response text:", jsonText);
+                            loadingIndicator.classList.add('hidden');
+                            return;
+                        }
+
+                        // Display Match Status First
+                        const matchThreshold = 70;
+                        if (parsedJson.matchScore >= matchThreshold) {
+                            matchStatus.textContent = `Candidate is a MATCH! (${parsedJson.matchScore}%)`;
+                            matchStatus.classList.add('bg-green-600');
+                        } else {
+                            matchStatus.textContent = `Candidate is NOT a Match (${parsedJson.matchScore}%)`;
+                            matchStatus.classList.add('bg-red-600');
+                        }
+                        matchStatus.classList.remove('hidden');
+
+                        profileSummary.innerHTML = `<p class="font-semibold text-xl mb-2">Profile Summary:</p><p>${parsedJson.profileSummary}</p>`;
+                        
+                        // Display Required Skills Check (Moved to appear right after Profile Summary)
+                        let requiredSkillsCheckHtml = '<p class="font-semibold text-xl mb-2">Required Skills Check:</p>';
+                        if (requiredSkillsArray.length > 0) {
+                            requiredSkillsCheckHtml += '<ul class="list-disc list-inside">';
+                            requiredSkillsArray.forEach(skill => {
+                                const isMatched = parsedJson.matchedSkills.some(matched => matched.toLowerCase().includes(skill.toLowerCase()));
+                                if (isMatched) {
+                                    requiredSkillsCheckHtml += `<li class="text-green-700">✅ ${skill} (Found)</li>`;
+                                } else {
+                                    requiredSkillsCheckHtml += `<li class="text-red-700">❌ ${skill} (Missing)</li>`;
+                                }
+                            });
+                            requiredSkillsCheckHtml += '</ul>';
+                        } else {
+                            requiredSkillsCheckHtml += `<p class="text-gray-600">No specific required skills were provided for checking.</p>`;
+                        }
+                        requiredSkillsCheck.innerHTML = requiredSkillsCheckHtml;
+
+
+                        matchScoreDisplay.innerHTML = `<p class="font-semibold text-xl mb-2">Overall Match Score:</p><p class="text-indigo-700 text-2xl font-bold">${parsedJson.matchScore}%</p>`;
+
+                        let generalSkillsHtml = '<p class="font-semibold text-xl mt-4 mb-2">Other Matched Skills (from overall description):</p><ul class="list-disc list-inside">';
+                        if (parsedJson.matchedSkills && parsedJson.matchedSkills.length > 0) {
+                            // Filter out skills that were explicitly checked in requiredSkillsArray to avoid duplication
+                            const otherMatchedSkills = parsedJson.matchedSkills.filter(skill => 
+                                !requiredSkillsArray.some(reqSkill => skill.toLowerCase().includes(reqReqSkill.toLowerCase()))
+                            );
+                            if (otherMatchedSkills.length > 0) {
+                                otherMatchedSkills.forEach(skill => {
+                                    generalSkillsHtml += `<li class="text-blue-700">${skill}</li>`;
+                                });
+                            } else {
+                                generalSkillsHtml += `<li>No additional matched skills found beyond the explicitly required ones.</li>`;
+                            }
+                        } else {
+                            generalSkillsHtml += `<li>No additional matched skills found.</li>`;
+                        }
+                        generalSkillsHtml += '</ul>';
+                        
+                        generalSkillsHtml += '<p class="font-semibold text-xl mt-4 mb-2">Missing Skills (from overall description):</p><ul class="list-disc list-inside">';
+                        if (parsedJson.missingSkills && parsedJson.missingSkills.length > 0) {
+                            // Filter out skills that were explicitly checked in requiredSkillsArray to avoid duplication
+                            const otherMissingSkills = parsedJson.missingSkills.filter(skill =>
+                                !requiredSkillsArray.some(reqSkill => skill.toLowerCase().includes(reqSkill.toLowerCase()))
+                            );
+                            if (otherMissingSkills.length > 0) {
+                                otherMissingSkills.forEach(skill => {
+                                    generalSkillsHtml += `<li class="text-red-700">${skill}</li>`;
+                                });
+                            } else {
+                                generalSkillsHtml += `<li>All general required skills seem to be present or not explicitly missing.</li>`;
+                            }
+                        } else {
+                            generalSkillsHtml += `<li>All general required skills seem to be present or not explicitly missing.</li>`;
+                        }
+                        generalSkillsHtml += '</ul>';
+                        matchScoreDisplay.innerHTML += generalSkillsHtml; // Append general skills to matchScoreDisplay
+
+                        matchScoreDisplay.innerHTML += `<p class="font-semibold text-xl mt-4 mb-2">Years of Experience:</p><p class="text-gray-700">${parsedJson.yearsOfExperience} years</p>`; // Display years of experience
+
+                        recruiterAnalysis.innerHTML = `<p class="font-semibold text-xl mb-2">Recruiter Analysis:</p><p>${parsedJson.recruiterAnalysis}</p>`;
+
+                        resultsDisplay.classList.remove('hidden');
+
+                    } else {
+                        errorMessage.textContent = 'Failed to get a valid response from the AI. The AI might not have been able to process the document or generate a structured output. Please try again or use a different document format (PDF/TXT recommended).';
+                        errorMessage.classList.remove('hidden');
+                        console.error("AI response structure unexpected or empty candidates:", result);
+                    }
+                } catch (error) {
+                    errorMessage.textContent = `An error occurred during analysis: ${error.message}. Please check your input and try again.`;
+                    errorMessage.classList.remove('hidden');
+                    console.error("Analysis error:", error);
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
